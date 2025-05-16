@@ -1,0 +1,37 @@
+name: Export Boomi Processes
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+  workflow_dispatch:
+
+jobs:
+  export-processes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Export Boomi Processes
+        run: |
+          mkdir -p boomi_exports
+          IFS=',' read -ra ids <<< "${{ secrets.BOOMI_COMPONENT_IDS }}"
+          for id in "${ids[@]}"; do
+            curl -s -X POST "https://${{ secrets.BOOMI_API_HOST }}/api/rest/v1/${{ secrets.BOOMI_ACCOUNT_ID }}/ProcessExport" \
+              -H "Authorization: Bearer ${{ secrets.BOOMI_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                    "componentId": "'"$id"'",
+                    "version": "latest",
+                    "includeDependencies": true
+                  }' \
+              -o "boomi_exports/${id}_$(date +%Y%m%d).zip"
+          done
+
+      - name: Push to Git
+        run: |
+          git config --global user.name "Boomi Bot"
+          git config --global user.email "boomi-bot@example.com"
+          git add boomi_exports/
+          git commit -m "Exported Boomi processes on $(date '+%Y-%m-%d %H:%M')" || echo "Nothing to commit"
+          git push
