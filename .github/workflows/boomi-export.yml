@@ -14,19 +14,26 @@ jobs:
 
       - name: Export Boomi Processes
         run: |
-          mkdir -p boomi_exports
+         mkdir -p boomi_exports
           IFS=',' read -ra ids <<< "${{ secrets.BOOMI_COMPONENT_IDS }}"
           for id in "${ids[@]}"; do
-            curl -s -X POST "https://${{ secrets.BOOMI_API_HOST }}/api/rest/v1/${{ secrets.BOOMI_ACCOUNT_ID }}/ProcessExport" \
+            echo "Exporting process ID: $id"
+            http_response=$(curl -w "%{http_code}" -s -o "boomi_exports/${id}_$(date +%Y%m%d).zip" -X POST \
+              "https://${{ secrets.BOOMI_API_HOST }}/api/rest/v1/${{ secrets.BOOMI_ACCOUNT_ID }}/ProcessExport" \
               -H "Authorization: Bearer ${{ secrets.BOOMI_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d '{
                     "componentId": "'"$id"'",
                     "version": "latest",
                     "includeDependencies": true
-                  }' \
-              -o "boomi_exports/${id}_$(date +%Y%m%d).zip"
+                  }')
+            echo "HTTP response code: $http_response"
+            if [[ "$http_response" -ne 200 ]]; then
+              echo "Failed to export process $id"
+              exit 3
+            fi
           done
+
 
       - name: Push to Git
         run: |
